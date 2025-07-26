@@ -3,43 +3,64 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Search, MapPin, Clock, Star, ArrowRight, Plus } from "lucide-react"
+import { ArrowRight, Star, Clock, MapPin, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { supabase, type Vendor, type MenuItem } from "@/lib/supabase"
 import { SearchBar } from "@/components/search-bar"
 import { useCart } from "@/lib/cart-context"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase"
+
+interface Vendor {
+  id: string
+  name: string
+  description: string
+  image: string
+  rating: number
+  delivery_time: string
+  location: string
+  cuisine_type: string
+}
+
+interface MenuItem {
+  id: string
+  name: string
+  description: string
+  price: number
+  image: string
+  vendor_id: string
+  vendor_name: string
+}
 
 export default function HomePage() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [featuredItems, setFeaturedItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const { addItem } = useCart()
-  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch approved vendors
-        const { data: vendorsData } = await supabase.from("vendors").select("*").eq("status", "approved").limit(6)
+        // Fetch vendors
+        const { data: vendorsData } = await supabase.from("vendors").select("*").limit(6)
 
         // Fetch featured menu items
         const { data: menuData } = await supabase
           .from("menu_items")
           .select(`
             *,
-            vendors (
-              vendor_name,
-              address
-            )
+            vendors (name)
           `)
-          .eq("available", true)
           .limit(8)
 
         setVendors(vendorsData || [])
-        setFeaturedItems(menuData || [])
+        setFeaturedItems(
+          menuData?.map((item) => ({
+            ...item,
+            vendor_name: item.vendors?.name || "Unknown Vendor",
+          })) || [],
+        )
       } catch (error) {
         console.error("Error fetching data:", error)
       } finally {
@@ -51,54 +72,50 @@ export default function HomePage() {
   }, [])
 
   const handleAddToCart = (item: MenuItem) => {
-    const vendorInfo = (item as any).vendors
     addItem({
       id: item.id,
       name: item.name,
       price: item.price,
-      vendor_id: item.vendor_id,
-      vendor_name: vendorInfo?.vendor_name || "Unknown Vendor",
-      image_url: item.image_url,
+      image: item.image,
+      vendor: item.vendor_name,
     })
 
     toast({
-      title: "Added to cart!",
-      description: `${item.name} has been added to your cart.`,
+      title: "Added to cart",
+      description: `${item.name} has been added to your cart`,
     })
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-orange-500 via-red-500 to-pink-600 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-black/10" />
-        <div className="absolute inset-0 bg-[url('/placeholder.svg?height=800&width=1200')] opacity-5" />
-        <div className="relative container mx-auto px-4 py-20 md:py-32">
+      <section className="relative bg-gradient-to-r from-orange-500 to-red-500 text-white py-20">
+        <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-7xl font-bold mb-6 leading-tight">
-              Taste Ghana,
-              <br />
-              <span className="bg-gradient-to-r from-yellow-300 to-orange-200 bg-clip-text text-transparent">
-                Delivered Fresh
-              </span>
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+              Delicious Food <br />
+              <span className="text-yellow-300">Delivered Fast</span>
             </h1>
-            <p className="text-lg md:text-xl mb-12 text-white/90 max-w-2xl mx-auto">
-              Discover authentic Ghanaian cuisine from local vendors, delivered to your doorstep
+            <p className="text-xl md:text-2xl mb-8 text-orange-100">
+              Order your favorite Ghanaian dishes from local vendors and get them delivered right to your doorstep
             </p>
-
-            <div className="max-w-2xl mx-auto mb-12">
-              <SearchBar className="w-full" />
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+              <Button size="lg" className="bg-white text-orange-600 hover:bg-orange-50 px-8 py-3">
+                <Link href="/auth/signup" className="flex items-center">
+                  Get Started
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white text-white hover:bg-white hover:text-orange-600 px-8 py-3 bg-transparent"
+              >
+                <Link href="/vendors">Browse Vendors</Link>
+              </Button>
             </div>
-
-            <div className="flex flex-wrap justify-center gap-6 text-sm opacity-90">
-              <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">
-                <MapPin className="h-4 w-4" />
-                <span>Accra • Kumasi • Tamale</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">
-                <Clock className="h-4 w-4" />
-                <span>30-45 min delivery</span>
-              </div>
+            <div className="max-w-md mx-auto">
+              <SearchBar />
             </div>
           </div>
         </div>
@@ -109,62 +126,47 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Featured Dishes</h2>
-            <p className="text-muted-foreground text-lg">Popular meals from our top vendors</p>
+            <p className="text-lg text-muted-foreground">Discover the most popular dishes from our vendors</p>
           </div>
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => (
-                <Card key={i} className="animate-pulse h-[400px]">
-                  <div className="h-48 bg-muted rounded-t-lg" />
-                  <CardContent className="p-4">
-                    <div className="h-4 bg-muted rounded mb-2" />
-                    <div className="h-3 bg-muted rounded mb-4 w-2/3" />
-                    <div className="h-6 bg-muted rounded w-1/3" />
-                  </CardContent>
+                <Card key={i} className="h-[400px]">
+                  <div className="animate-pulse">
+                    <div className="h-48 bg-muted rounded-t-lg"></div>
+                    <CardContent className="p-4">
+                      <div className="h-4 bg-muted rounded mb-2"></div>
+                      <div className="h-3 bg-muted rounded mb-4"></div>
+                      <div className="h-6 bg-muted rounded"></div>
+                    </CardContent>
+                  </div>
                 </Card>
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredItems.map((item) => (
-                <Card key={item.id} className="group hover:shadow-lg transition-shadow h-[400px] flex flex-col">
-                  <div className="relative h-48 overflow-hidden rounded-t-lg">
-                    <Image
-                      src={
-                        item.image_url || `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name)}`
-                      }
-                      alt={item.name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <Badge className="absolute top-2 right-2 bg-green-500">Available</Badge>
-                    <Button
-                      size="icon"
-                      className="absolute top-2 left-2 bg-white/90 hover:bg-white text-black"
-                      onClick={() => handleAddToCart(item)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                <Card
+                  key={item.id}
+                  className="h-[400px] flex flex-col overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <div className="relative h-48">
+                    <Image src={item.image || "/placeholder.jpg"} alt={item.name} fill className="object-cover" />
                   </div>
-                  <CardContent className="p-4 flex flex-col flex-1">
-                    <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
-                    <p className="text-muted-foreground text-sm mb-2 line-clamp-2 flex-1">{item.description}</p>
-                    <div className="mt-auto">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-lg text-orange-500">₵{item.price}</span>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>{item.prep_time || 30}min</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground mb-3">by {(item as any).vendors?.vendor_name}</p>
+                  <CardContent className="p-4 flex-1 flex flex-col">
+                    <h3 className="font-semibold text-lg mb-2 line-clamp-1">{item.name}</h3>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2 flex-1">{item.description}</p>
+                    <p className="text-xs text-muted-foreground mb-3">{item.vendor_name}</p>
+                    <div className="flex items-center justify-between mt-auto">
+                      <span className="text-lg font-bold text-orange-600">₵{item.price.toFixed(2)}</span>
                       <Button
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
                         size="sm"
                         onClick={() => handleAddToCart(item)}
+                        className="bg-orange-600 hover:bg-orange-700"
                       >
-                        Add to Cart
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
                       </Button>
                     </div>
                   </CardContent>
@@ -180,132 +182,103 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Popular Vendors</h2>
-            <p className="text-muted-foreground text-lg">Trusted local food vendors in your area</p>
+            <p className="text-lg text-muted-foreground">Trusted by thousands of customers</p>
           </div>
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse h-[280px]">
-                  <div className="h-32 bg-muted rounded-t-lg" />
-                  <CardContent className="p-6">
-                    <div className="h-6 bg-muted rounded mb-2" />
-                    <div className="h-4 bg-muted rounded mb-4" />
-                    <div className="h-4 bg-muted rounded w-1/2" />
-                  </CardContent>
+                <Card key={i} className="h-[280px]">
+                  <div className="animate-pulse">
+                    <div className="h-32 bg-muted rounded-t-lg"></div>
+                    <CardContent className="p-4">
+                      <div className="h-4 bg-muted rounded mb-2"></div>
+                      <div className="h-3 bg-muted rounded mb-4"></div>
+                      <div className="h-6 bg-muted rounded"></div>
+                    </CardContent>
+                  </div>
                 </Card>
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {vendors.map((vendor) => (
-                <Card key={vendor.id} className="group hover:shadow-lg transition-shadow h-[280px] flex flex-col">
-                  <div className="relative h-32 overflow-hidden rounded-t-lg bg-gradient-to-r from-orange-400 to-red-400">
-                    <Image
-                      src={
-                        vendor.image_url ||
-                        `/placeholder.svg?height=150&width=400&query=${encodeURIComponent(vendor.vendor_name + " restaurant") || "/placeholder.svg"}`
-                      }
-                      alt={vendor.vendor_name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform"
-                    />
+                <Card
+                  key={vendor.id}
+                  className="h-[280px] flex flex-col overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <div className="relative h-32">
+                    <Image src={vendor.image || "/placeholder.jpg"} alt={vendor.name} fill className="object-cover" />
                   </div>
-                  <CardContent className="p-6 flex flex-col flex-1">
+                  <CardContent className="p-4 flex-1 flex flex-col">
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-xl">{vendor.vendor_name}</h3>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm">4.5</span>
+                      <h3 className="font-semibold text-lg line-clamp-1">{vendor.name}</h3>
+                      <Badge variant="secondary" className="ml-2">
+                        <Star className="h-3 w-3 mr-1 fill-current" />
+                        {vendor.rating}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2 flex-1">{vendor.description}</p>
+                    <div className="space-y-1 text-xs text-muted-foreground mb-4">
+                      <div className="flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {vendor.delivery_time}
+                      </div>
+                      <div className="flex items-center">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        <span className="truncate">{vendor.location}</span>
                       </div>
                     </div>
-                    <p className="text-muted-foreground mb-4 line-clamp-2 flex-1">{vendor.description}</p>
-                    <div className="flex items-center justify-between mt-auto">
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        <span className="truncate max-w-[120px]">{vendor.address}</span>
-                      </div>
-                      <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold" size="sm" asChild>
-                        <Link href={`/vendor/${vendor.id}`}>
-                          View Menu
-                          <ArrowRight className="h-3 w-3 ml-1" />
-                        </Link>
-                      </Button>
-                    </div>
+                    <Button asChild className="w-full mt-auto bg-orange-600 hover:bg-orange-700">
+                      <Link href={`/vendors/${vendor.id}`}>View Menu</Link>
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
 
-          <div className="text-center mt-12">
-            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8" asChild>
+          <div className="text-center mt-8">
+            <Button asChild variant="outline" size="lg">
               <Link href="/vendors">
                 View All Vendors
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
           </div>
         </div>
       </section>
 
-      {/* How it Works */}
+      {/* How It Works */}
       <section className="py-16 bg-background">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How ChopNow Works</h2>
-            <p className="text-muted-foreground text-lg">Get your favorite Ghanaian food in 3 simple steps</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
+            <p className="text-lg text-muted-foreground">Simple steps to get your food delivered</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="h-8 w-8 text-orange-500" />
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-orange-600">1</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">1. Browse & Search</h3>
-              <p className="text-muted-foreground">Discover local vendors and browse their delicious Ghanaian dishes</p>
+              <h3 className="text-xl font-semibold mb-2">Choose Your Food</h3>
+              <p className="text-muted-foreground">Browse through our wide selection of local vendors and dishes</p>
             </div>
-
             <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🛒</span>
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-orange-600">2</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">2. Order & Pay</h3>
-              <p className="text-muted-foreground">Add items to cart, customize your order, and pay securely</p>
+              <h3 className="text-xl font-semibold mb-2">Place Your Order</h3>
+              <p className="text-muted-foreground">Add items to cart and checkout with secure payment</p>
             </div>
-
             <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🚚</span>
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-orange-600">3</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">3. Track & Enjoy</h3>
-              <p className="text-muted-foreground">Track your order in real-time and enjoy fresh, hot food</p>
+              <h3 className="text-xl font-semibold mb-2">Get It Delivered</h3>
+              <p className="text-muted-foreground">Track your order and enjoy fresh food at your doorstep</p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-r from-orange-500 to-red-500 text-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to taste authentic Ghana?</h2>
-          <p className="text-xl mb-8 text-white/90">Join thousands of food lovers ordering from ChopNow</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              size="lg"
-              className="bg-white text-orange-500 hover:bg-gray-100 font-semibold px-8 py-3 text-lg"
-              asChild
-            >
-              <Link href="/auth/signup">Get Started</Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-white border-2 border-white hover:bg-white hover:text-orange-500 bg-transparent font-semibold px-8 py-3 text-lg"
-              asChild
-            >
-              <Link href="/vendors">Browse Vendors</Link>
-            </Button>
           </div>
         </div>
       </section>

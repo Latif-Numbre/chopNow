@@ -3,31 +3,24 @@
 import { supabase } from "./supabase"
 import { useState, useEffect } from "react"
 
-export const signUp = async (email: string, password: string, name: string, phone?: string) => {
+export async function signUp(email: string, password: string, userData: any) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: {
-        name,
-        phone,
-      },
-    },
   })
 
   if (error) throw error
 
-  // Create user profile
   if (data.user) {
-    const { error: profileError } = await supabase.from("users").insert([
-      {
-        id: data.user.id,
-        name,
-        email,
-        phone,
-        role: "user",
-      },
-    ])
+    // Create user profile
+    const { error: profileError } = await supabase.from("users").insert({
+      id: data.user.id,
+      email: data.user.email,
+      name: userData.name,
+      phone: userData.phone,
+      role: "customer",
+      created_at: new Date().toISOString(),
+    })
 
     if (profileError) throw profileError
   }
@@ -35,7 +28,7 @@ export const signUp = async (email: string, password: string, name: string, phon
   return data
 }
 
-export const signIn = async (email: string, password: string) => {
+export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -45,33 +38,27 @@ export const signIn = async (email: string, password: string) => {
   return data
 }
 
-export const signOut = async () => {
+export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
 
-export const getCurrentUser = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return null
-
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single()
-
-  return profile
-}
-
-// Add the missing useAuth hook
-export const useAuth = () => {
+export function useAuth() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Get initial user
     const getUser = async () => {
       try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser()
+
+        if (authUser) {
+          const { data: profile } = await supabase.from("users").select("*").eq("id", authUser.id).single()
+          setUser(profile)
+        }
       } catch (error) {
         console.error("Error fetching user:", error)
       } finally {
@@ -81,12 +68,13 @@ export const useAuth = () => {
 
     getUser()
 
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        const { data: profile } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+        setUser(profile)
       } else {
         setUser(null)
       }

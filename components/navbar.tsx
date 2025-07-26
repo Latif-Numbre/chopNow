@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Menu, ShoppingCart, User, LogOut, Settings, Package, Home } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
+import { useTheme } from "next-themes"
+import { Moon, Sun, User, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,287 +13,203 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { CartSidebar } from "@/components/cart-sidebar"
-import { useCart } from "@/lib/cart-context"
-import { signOut } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
+import { signOut } from "@/lib/auth"
+import { CartSidebar } from "./cart-sidebar"
 
 export function Navbar() {
+  const { theme, setTheme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { items } = useCart()
   const router = useRouter()
+  const pathname = usePathname()
 
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
+  // Don't show navbar on auth pages
+  const isAuthPage = pathname?.startsWith("/auth/")
 
   useEffect(() => {
     const getUser = async () => {
-      try {
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
 
-        if (authUser) {
-          const { data: profile } = await supabase.from("users").select("*").eq("id", authUser.id).single()
-          setUser(profile)
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error)
-      } finally {
-        setLoading(false)
+      if (user) {
+        // Get user profile with role - using users table
+        const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single()
+        setUserProfile(profile)
       }
     }
-
     getUser()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user || null)
+
       if (session?.user) {
         const { data: profile } = await supabase.from("users").select("*").eq("id", session.user.id).single()
-        setUser(profile)
+        setUserProfile(profile)
       } else {
-        setUser(null)
+        setUserProfile(null)
       }
-      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   const handleSignOut = async () => {
-    try {
-      await signOut()
-      router.push("/")
-    } catch (error) {
-      console.error("Error signing out:", error)
-    }
+    await signOut()
+    setUser(null)
+    setUserProfile(null)
+    router.push("/")
   }
 
-  const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/vendors", label: "Vendors" },
-    { href: "/about", label: "About" },
-    { href: "/contact", label: "Contact" },
-  ]
+  if (isAuthPage) {
+    return null
+  }
 
   return (
-    <>
-      <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">CN</span>
-              </div>
-              <span className="font-bold text-xl">ChopNow</span>
+    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4">
+        <div className="flex h-16 items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center space-x-2">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+              <span className="text-white font-bold text-sm">CN</span>
+            </div>
+            <span className="font-bold text-xl text-foreground">ChopNow</span>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-6">
+            <Link href="/vendors" className="text-foreground/80 hover:text-foreground transition-colors">
+              Vendors
             </Link>
-
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-8">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-sm font-medium transition-colors hover:text-orange-500"
-                >
-                  {link.label}
+            {user && (
+              <>
+                <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
+                  Orders
                 </Link>
-              ))}
-            </div>
+                <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
+                  Dashboard
+                </Link>
+                {userProfile?.role === "admin" && (
+                  <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Admin
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
+          {/* Right side actions */}
+          <div className="flex items-center space-x-4">
+            {/* Theme toggle */}
+            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
 
-              {/* Cart */}
-              <CartSidebar>
-                <Button variant="outline" size="icon" className="relative bg-transparent">
-                  <ShoppingCart className="h-4 w-4" />
-                  {totalItems > 0 && (
-                    <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs bg-orange-500">
-                      {totalItems}
-                    </Badge>
-                  )}
-                </Button>
-              </CartSidebar>
+            {/* Cart */}
+            {user && <CartSidebar />}
 
-              {loading ? (
-                <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
-              ) : user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src="/placeholder-user.jpg" alt={user.name} />
-                        <AvatarFallback>{user.name?.charAt(0)?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <div className="flex items-center justify-start gap-2 p-2">
-                      <div className="flex flex-col space-y-1 leading-none">
-                        <p className="font-medium">{user.name}</p>
-                        <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>
-                      </div>
-                    </div>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard" className="flex items-center">
-                        <Home className="mr-2 h-4 w-4" />
-                        Dashboard
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/orders" className="flex items-center">
-                        <Package className="mr-2 h-4 w-4" />
-                        Orders
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/profile" className="flex items-center">
-                        <User className="mr-2 h-4 w-4" />
-                        Profile
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/settings" className="flex items-center">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
-                    {user.role === "admin" && (
-                      <DropdownMenuItem asChild>
-                        <Link href="/admin" className="flex items-center">
-                          <Settings className="mr-2 h-4 w-4" />
-                          Admin Panel
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="hidden md:flex items-center space-x-2">
-                  <Button variant="ghost" asChild>
-                    <Link href="/auth/signin">Sign In</Link>
-                  </Button>
-                  <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                    <Link href="/auth/signup">Sign Up</Link>
-                  </Button>
-                </div>
-              )}
-
-              {/* Mobile Menu */}
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild className="md:hidden">
+            {/* User menu */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon">
-                    <Menu className="h-5 w-5" />
+                    <User className="h-5 w-5" />
                   </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                  <div className="flex flex-col space-y-4 mt-4">
-                    {navLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        className="text-lg font-medium transition-colors hover:text-orange-500"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">Settings</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/orders">My Orders</Link>
+                  </DropdownMenuItem>
+                  {userProfile?.role === "admin" && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin">Admin Panel</Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="hidden md:flex items-center space-x-2">
+                <Button variant="ghost" asChild>
+                  <Link href="/auth/signin">Sign In</Link>
+                </Button>
+                <Button asChild className="bg-orange-600 hover:bg-orange-700">
+                  <Link href="/auth/signup">Sign Up</Link>
+                </Button>
+              </div>
+            )}
 
-                    {user ? (
-                      <>
-                        <div className="border-t pt-4">
-                          <div className="flex items-center space-x-2 mb-4">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src="/placeholder-user.jpg" alt={user.name} />
-                              <AvatarFallback>{user.name?.charAt(0)?.toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{user.name}</p>
-                              <p className="text-sm text-muted-foreground">{user.email}</p>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Link
-                              href="/dashboard"
-                              className="flex items-center space-x-2 text-lg font-medium"
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <Home className="h-4 w-4" />
-                              <span>Dashboard</span>
-                            </Link>
-                            <Link
-                              href="/orders"
-                              className="flex items-center space-x-2 text-lg font-medium"
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <Package className="h-4 w-4" />
-                              <span>Orders</span>
-                            </Link>
-                            <Link
-                              href="/profile"
-                              className="flex items-center space-x-2 text-lg font-medium"
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <User className="h-4 w-4" />
-                              <span>Profile</span>
-                            </Link>
-                            <Link
-                              href="/settings"
-                              className="flex items-center space-x-2 text-lg font-medium"
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <Settings className="h-4 w-4" />
-                              <span>Settings</span>
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start text-red-600 p-0 h-auto"
-                              onClick={() => {
-                                handleSignOut()
-                                setMobileMenuOpen(false)
-                              }}
-                            >
-                              <LogOut className="mr-2 h-4 w-4" />
-                              Sign out
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="border-t pt-4 space-y-2">
-                        <Button variant="ghost" className="w-full justify-start" asChild>
-                          <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)}>
-                            Sign In
-                          </Link>
-                        </Button>
-                        <Button className="w-full bg-orange-500 hover:bg-orange-600" asChild>
-                          <Link href="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
-                            Sign Up
-                          </Link>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
+            {/* Mobile menu button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
-      </nav>
-    </>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t py-4">
+            <div className="flex flex-col space-y-4">
+              <Link href="/vendors" className="text-foreground/80 hover:text-foreground transition-colors">
+                Vendors
+              </Link>
+              {user ? (
+                <>
+                  <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Orders
+                  </Link>
+                  <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Dashboard
+                  </Link>
+                  <Link href="/profile" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Profile
+                  </Link>
+                  <Link href="/settings" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Settings
+                  </Link>
+                  {userProfile?.role === "admin" && (
+                    <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
+                      Admin Panel
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link href="/auth/signin" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Sign In
+                  </Link>
+                  <Link href="/auth/signup" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
   )
 }
