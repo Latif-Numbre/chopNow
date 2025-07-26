@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
@@ -12,30 +12,56 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { signIn } from "@/lib/auth"
+import { supabase } from "@/lib/supabase"
 
 export default function SignInPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
   const { toast } = useToast()
+
+  // Check if user is already signed in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        router.push("/dashboard")
+        return
+      }
+      setChecking(false)
+    }
+    checkAuth()
+  }, [router])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      await signIn(email, password)
+      await signIn(formData.email, formData.password)
       toast({
         title: "Welcome back!",
-        description: "You have successfully signed in.",
+        description: "You have been signed in successfully.",
       })
-      router.push("/")
+      router.push("/dashboard")
     } catch (error: any) {
       toast({
         title: "Sign in failed",
-        description: error.message || "Please check your credentials and try again.",
+        description: error.message || "Invalid email or password. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -43,15 +69,23 @@ export default function SignInPage() {
     }
   }
 
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto h-12 w-12 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center mb-4">
             <span className="text-white font-bold text-lg">CN</span>
           </div>
           <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-          <CardDescription>Sign in to your ChopNow account to continue ordering</CardDescription>
+          <CardDescription>Sign in to your ChopNow account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,10 +95,11 @@ export default function SignInPage() {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={formData.email}
+                  onChange={handleChange}
                   className="pl-10"
                   required
                 />
@@ -77,10 +112,11 @@ export default function SignInPage() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={handleChange}
                   className="pl-10 pr-10"
                   required
                 />
@@ -94,7 +130,13 @@ export default function SignInPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <div className="flex items-center justify-between">
+              <Link href="/auth/forgot-password" className="text-sm text-orange-500 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+
+            <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
@@ -106,12 +148,6 @@ export default function SignInPage() {
                 Sign up
               </Link>
             </p>
-          </div>
-
-          <div className="mt-4 text-center">
-            <Link href="/auth/forgot-password" className="text-sm text-orange-500 hover:underline">
-              Forgot your password?
-            </Link>
           </div>
         </CardContent>
       </Card>

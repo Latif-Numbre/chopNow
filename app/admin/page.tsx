@@ -1,267 +1,339 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Image from "next/image"
-import { Check, X, Eye, MapPin, Phone, Mail, AlertTriangle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ProtectedRoute } from "@/components/protected-route"
+import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { supabase, type Vendor } from "@/lib/supabase"
-import { getCurrentUser } from "@/lib/auth"
-
-interface VendorWithUser extends Vendor {
-  users: {
-    name: string
-    email: string
-    phone: string
-  }
-}
+import { Users, Store, ShoppingBag, DollarSign, Check, X, Eye } from "lucide-react"
 
 export default function AdminPage() {
-  const [user, setUser] = useState<any>(null)
-  const [pendingVendors, setPendingVendors] = useState<VendorWithUser[]>([])
-  const [approvedVendors, setApprovedVendors] = useState<VendorWithUser[]>([])
-  const [blockedVendors, setBlockedVendors] = useState<VendorWithUser[]>([])
+  const [pendingVendors, setPendingVendors] = useState([])
+  const [allVendors, setAllVendors] = useState([])
+  const [orders, setOrders] = useState([])
+  const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
-    const checkAdminAndFetchData = async () => {
-      try {
-        const currentUser = await getCurrentUser()
-        if (!currentUser || currentUser.role !== "admin") {
-          router.push("/")
-          return
-        }
-        setUser(currentUser)
-        await fetchVendors()
-      } catch (error) {
-        console.error("Error:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
+    fetchData()
+  }, [])
 
-    checkAdminAndFetchData()
-  }, [router])
-
-  const fetchVendors = async () => {
+  const fetchData = async () => {
     try {
-      const { data } = await supabase
+      // Fetch pending vendors
+      const { data: pendingVendorsData } = await supabase
         .from("vendors")
-        .select(`
-          *,
-          users (
-            name,
-            email,
-            phone
-          )
-        `)
+        .select("*")
+        .eq("status", "pending")
         .order("created_at", { ascending: false })
 
-      if (data) {
-        setPendingVendors(data.filter((v) => v.status === "pending"))
-        setApprovedVendors(data.filter((v) => v.status === "approved"))
-        setBlockedVendors(data.filter((v) => v.status === "blocked"))
-      }
+      // Fetch all vendors
+      const { data: allVendorsData } = await supabase
+        .from("vendors")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      // Fetch recent orders
+      const { data: ordersData } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          vendors (vendor_name),
+          profiles (full_name)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(10)
+
+      // Fetch users
+      const { data: usersData } = await supabase.from("profiles").select("*").order("created_at", { ascending: false })
+
+      setPendingVendors(pendingVendorsData || [])
+      setAllVendors(allVendorsData || [])
+      setOrders(ordersData || [])
+      setUsers(usersData || [])
     } catch (error) {
-      console.error("Error fetching vendors:", error)
+      console.error("Error fetching admin data:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const updateVendorStatus = async (vendorId: string, status: "approved" | "blocked") => {
+  const handleVendorAction = async (vendorId: string, action: "approve" | "reject") => {
     try {
-      const { error } = await supabase
-        .from("vendors")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("id", vendorId)
+      const status = action === "approve" ? "approved" : "rejected"
+
+      const { error } = await supabase.from("vendors").update({ status }).eq("id", vendorId)
 
       if (error) throw error
 
       toast({
-        title: "Vendor status updated",
-        description: `Vendor has been ${status}`,
+        title: `Vendor ${action}d`,
+        description: `The vendor has been ${action}d successfully.`,
       })
 
-      await fetchVendors()
+      fetchData() // Refresh data
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || `Failed to ${action} vendor.`,
         variant: "destructive",
       })
     }
   }
 
-  const VendorCard = ({ vendor, showActions = true }: { vendor: VendorWithUser; showActions?: boolean }) => (
-    <Card className="overflow-hidden">
-      <div className="relative h-32 bg-gradient-to-r from-orange-400 to-red-400">
-        {vendor.image_url && (
-          <Image src={vendor.image_url || "/placeholder.svg"} alt={vendor.vendor_name} fill className="object-cover" />
-        )}
-        <div className="absolute top-3 right-3">
-          <Badge
-            variant={
-              vendor.status === "approved" ? "default" : vendor.status === "pending" ? "secondary" : "destructive"
-            }
-          >
-            {vendor.status}
-          </Badge>
-        </div>
-      </div>
-      <CardContent className="p-6">
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-bold text-lg">{vendor.vendor_name}</h3>
-            <p className="text-muted-foreground text-sm line-clamp-2">
-              {vendor.description || "No description provided"}
-            </p>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span>{vendor.users.email}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span>{vendor.users.phone || "No phone provided"}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <span>{vendor.address || "No address provided"}</span>
-            </div>
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            Applied: {new Date(vendor.created_at).toLocaleDateString()}
-          </div>
-
-          {showActions && vendor.status === "pending" && (
-            <div className="flex gap-2 pt-2">
-              <Button size="sm" onClick={() => updateVendorStatus(vendor.id, "approved")} className="flex-1">
-                <Check className="h-4 w-4 mr-1" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => updateVendorStatus(vendor.id, "blocked")}
-                className="flex-1"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Reject
-              </Button>
-            </div>
-          )}
-
-          {showActions && vendor.status === "approved" && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => updateVendorStatus(vendor.id, "blocked")}
-              className="w-full"
-            >
-              <AlertTriangle className="h-4 w-4 mr-1" />
-              Block Vendor
-            </Button>
-          )}
-
-          {showActions && vendor.status === "blocked" && (
-            <Button size="sm" onClick={() => updateVendorStatus(vendor.id, "approved")} className="w-full">
-              <Check className="h-4 w-4 mr-1" />
-              Unblock Vendor
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-muted rounded w-1/4" />
-            <div className="grid gap-6">
-              {[...Array(3)].map((_, i) => (
-                <Card key={i}>
-                  <CardContent className="p-6">
-                    <div className="h-6 bg-muted rounded mb-4" />
-                    <div className="h-4 bg-muted rounded mb-2" />
-                    <div className="h-4 bg-muted rounded w-1/2" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+  const stats = {
+    totalUsers: users.length,
+    totalVendors: allVendors.length,
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce((sum: number, order: any) => sum + (order.total_amount || 0), 0),
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 border-b">
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl md:text-5xl font-bold mb-4">Admin Panel</h1>
-            <p className="text-lg text-muted-foreground">Manage vendor applications and monitor platform activities</p>
-          </div>
-        </div>
-      </div>
-
+    <ProtectedRoute requiredRole="admin">
       <div className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="pending" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
-            <TabsTrigger value="pending">Pending ({pendingVendors.length})</TabsTrigger>
-            <TabsTrigger value="approved">Approved ({approvedVendors.length})</TabsTrigger>
-            <TabsTrigger value="blocked">Blocked ({blockedVendors.length})</TabsTrigger>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
+          <p className="text-muted-foreground">Manage vendors, orders, and users</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalUsers}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Vendors</CardTitle>
+              <Store className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalVendors}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalOrders}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₵{stats.totalRevenue.toFixed(2)}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="pending-vendors" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="pending-vendors">Pending Vendors ({pendingVendors.length})</TabsTrigger>
+            <TabsTrigger value="all-vendors">All Vendors</TabsTrigger>
+            <TabsTrigger value="orders">Recent Orders</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pending" className="mt-8">
-            {pendingVendors.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <div className="h-24 w-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Eye className="h-12 w-12 text-muted-foreground" />
+          <TabsContent value="pending-vendors">
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending Vendor Applications</CardTitle>
+                <CardDescription>Review and approve vendor applications</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {pendingVendors.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No pending vendor applications</p>
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">No pending applications</h3>
-                  <p className="text-muted-foreground">All vendor applications have been reviewed</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {pendingVendors.map((vendor) => (
-                  <VendorCard key={vendor.id} vendor={vendor} />
-                ))}
-              </div>
-            )}
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Vendor Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Address</TableHead>
+                        <TableHead>Applied</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingVendors.map((vendor: any) => (
+                        <TableRow key={vendor.id}>
+                          <TableCell className="font-medium">{vendor.vendor_name}</TableCell>
+                          <TableCell>{vendor.email}</TableCell>
+                          <TableCell>{vendor.phone}</TableCell>
+                          <TableCell>{vendor.address}</TableCell>
+                          <TableCell>{new Date(vendor.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => handleVendorAction(vendor.id, "approve")}>
+                                <Check className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleVendorAction(vendor.id, "reject")}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="approved" className="mt-8">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {approvedVendors.map((vendor) => (
-                <VendorCard key={vendor.id} vendor={vendor} />
-              ))}
-            </div>
+          <TabsContent value="all-vendors">
+            <Card>
+              <CardHeader>
+                <CardTitle>All Vendors</CardTitle>
+                <CardDescription>Manage all registered vendors</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Registered</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allVendors.map((vendor: any) => (
+                      <TableRow key={vendor.id}>
+                        <TableCell className="font-medium">{vendor.vendor_name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              vendor.status === "approved"
+                                ? "default"
+                                : vendor.status === "pending"
+                                  ? "secondary"
+                                  : "destructive"
+                            }
+                          >
+                            {vendor.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{vendor.email}</TableCell>
+                        <TableCell>{vendor.phone}</TableCell>
+                        <TableCell>{new Date(vendor.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline">
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="blocked" className="mt-8">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {blockedVendors.map((vendor) => (
-                <VendorCard key={vendor.id} vendor={vendor} />
-              ))}
-            </div>
+          <TabsContent value="orders">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Orders</CardTitle>
+                <CardDescription>Monitor recent order activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orders.map((order: any) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-mono">#{order.id.slice(0, 8)}</TableCell>
+                        <TableCell>{order.profiles?.full_name || "N/A"}</TableCell>
+                        <TableCell>{order.vendors?.vendor_name || "N/A"}</TableCell>
+                        <TableCell>₵{order.total_amount}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{order.status}</Badge>
+                        </TableCell>
+                        <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="users">
+            <Card>
+              <CardHeader>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>Manage platform users</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Joined</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user: any) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.full_name || "N/A"}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{user.role}</Badge>
+                        </TableCell>
+                        <TableCell>{user.phone || "N/A"}</TableCell>
+                        <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </ProtectedRoute>
   )
 }

@@ -3,18 +3,21 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Search, MapPin, Clock, Star, ArrowRight } from "lucide-react"
+import { Search, MapPin, Clock, Star, ArrowRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Vendor, type MenuItem } from "@/lib/supabase"
 import { SearchBar } from "@/components/search-bar"
+import { useCart } from "@/lib/cart-context"
+import { useToast } from "@/hooks/use-toast"
 
 export default function HomePage() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [featuredItems, setFeaturedItems] = useState<MenuItem[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
+  const { addItem } = useCart()
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -47,6 +50,23 @@ export default function HomePage() {
     fetchData()
   }, [])
 
+  const handleAddToCart = (item: MenuItem) => {
+    const vendorInfo = (item as any).vendors
+    addItem({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      vendor_id: item.vendor_id,
+      vendor_name: vendorInfo?.vendor_name || "Unknown Vendor",
+      image_url: item.image_url,
+    })
+
+    toast({
+      title: "Added to cart!",
+      description: `${item.name} has been added to your cart.`,
+    })
+  }
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -58,7 +78,7 @@ export default function HomePage() {
             <h1 className="text-4xl md:text-7xl font-bold mb-6 leading-tight">
               Taste Ghana,
               <br />
-              <span className="gradient-text bg-gradient-to-r from-yellow-300 to-orange-200 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-yellow-300 to-orange-200 bg-clip-text text-transparent">
                 Delivered Fresh
               </span>
             </h1>
@@ -108,7 +128,7 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredItems.map((item) => (
-                <Card key={item.id} className="group hover:shadow-lg transition-shadow cursor-pointer">
+                <Card key={item.id} className="group hover:shadow-lg transition-shadow">
                   <div className="relative h-48 overflow-hidden rounded-t-lg">
                     <Image
                       src={
@@ -119,18 +139,32 @@ export default function HomePage() {
                       className="object-cover group-hover:scale-105 transition-transform"
                     />
                     <Badge className="absolute top-2 right-2 bg-green-500">Available</Badge>
+                    <Button
+                      size="icon"
+                      className="absolute top-2 left-2 bg-white/90 hover:bg-white text-black"
+                      onClick={() => handleAddToCart(item)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
                   <CardContent className="p-4">
                     <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
                     <p className="text-muted-foreground text-sm mb-2 line-clamp-2">{item.description}</p>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <span className="font-bold text-lg text-orange-500">₵{item.price}</span>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         <span>{item.prep_time || 30}min</span>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">by {(item as any).vendors?.vendor_name}</p>
+                    <p className="text-xs text-muted-foreground mb-3">by {(item as any).vendors?.vendor_name}</p>
+                    <Button
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                      size="sm"
+                      onClick={() => handleAddToCart(item)}
+                    >
+                      Add to Cart
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -189,7 +223,7 @@ export default function HomePage() {
                         <MapPin className="h-3 w-3" />
                         <span>{vendor.address}</span>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
+                      <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold" size="sm" asChild>
                         <Link href={`/vendor/${vendor.id}`}>
                           View Menu
                           <ArrowRight className="h-3 w-3 ml-1" />
@@ -203,7 +237,7 @@ export default function HomePage() {
           )}
 
           <div className="text-center mt-12">
-            <Button size="lg" variant="outline" asChild>
+            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8" asChild>
               <Link href="/vendors">
                 View All Vendors
                 <ArrowRight className="h-4 w-4 ml-2" />
@@ -255,13 +289,17 @@ export default function HomePage() {
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to taste authentic Ghana?</h2>
           <p className="text-xl mb-8 text-white/90">Join thousands of food lovers ordering from ChopNow</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="secondary" asChild>
+            <Button
+              size="lg"
+              className="bg-white text-orange-500 hover:bg-gray-100 font-semibold px-8 py-3 text-lg"
+              asChild
+            >
               <Link href="/auth/signup">Get Started</Link>
             </Button>
             <Button
               size="lg"
               variant="outline"
-              className="text-white border-white hover:bg-white hover:text-orange-500 bg-transparent"
+              className="text-white border-2 border-white hover:bg-white hover:text-orange-500 bg-transparent font-semibold px-8 py-3 text-lg"
               asChild
             >
               <Link href="/vendors">Browse Vendors</Link>

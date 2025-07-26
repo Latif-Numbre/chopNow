@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Navbar } from "@/components/navbar"
 import { Toaster } from "@/components/ui/toaster"
 import { SearchProvider } from "@/lib/search-context"
+import { CartProvider } from "@/lib/cart-context"
 import { Suspense } from "react"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -13,7 +14,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "ChopNow - Ghanaian Food Delivery",
   description: "Order delicious Ghanaian food from local vendors",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -27,9 +28,11 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <Suspense fallback={<div>Loading...</div>}>
             <SearchProvider>
-              <Navbar />
-              <main className="min-h-screen bg-background">{children}</main>
-              <Toaster />
+              <CartProvider>
+                <Navbar />
+                <main className="min-h-screen bg-background">{children}</main>
+                <Toaster />
+              </CartProvider>
             </SearchProvider>
           </Suspense>
         </ThemeProvider>

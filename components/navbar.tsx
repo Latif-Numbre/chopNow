@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter, usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, ShoppingCart, User, Menu, X } from "lucide-react"
+import { Moon, Sun, User, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +15,18 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import { signOut } from "@/lib/auth"
+import { CartSidebar } from "./cart-sidebar"
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const [cartItems, setCartItems] = useState(0)
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // Don't show navbar on auth pages
+  const isAuthPage = pathname?.startsWith("/auth/")
 
   useEffect(() => {
     const getUser = async () => {
@@ -28,13 +34,26 @@ export function Navbar() {
         data: { user },
       } = await supabase.auth.getUser()
       setUser(user)
+
+      if (user) {
+        // Get user profile with role
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+        setUserProfile(profile)
+      }
     }
     getUser()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user || null)
+
+      if (session?.user) {
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+        setUserProfile(profile)
+      } else {
+        setUserProfile(null)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -43,6 +62,12 @@ export function Navbar() {
   const handleSignOut = async () => {
     await signOut()
     setUser(null)
+    setUserProfile(null)
+    router.push("/")
+  }
+
+  if (isAuthPage) {
+    return null
   }
 
   return (
@@ -62,17 +87,21 @@ export function Navbar() {
             <Link href="/vendors" className="text-foreground/80 hover:text-foreground transition-colors">
               Vendors
             </Link>
-            <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
-              Orders
-            </Link>
-            {user?.role === "admin" && (
-              <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
-                Admin
-              </Link>
+            {user && (
+              <>
+                <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
+                  Orders
+                </Link>
+                <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
+                  Dashboard
+                </Link>
+                {userProfile?.role === "admin" && (
+                  <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Admin
+                  </Link>
+                )}
+              </>
             )}
-            <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
-              Dashboard
-            </Link>
           </div>
 
           {/* Right side actions */}
@@ -85,14 +114,7 @@ export function Navbar() {
             </Button>
 
             {/* Cart */}
-            <Button variant="ghost" size="icon" className="relative">
-              <ShoppingCart className="h-5 w-5" />
-              {cartItems > 0 && (
-                <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                  {cartItems}
-                </Badge>
-              )}
-            </Button>
+            {user && <CartSidebar />}
 
             {/* User menu */}
             {user ? (
@@ -115,7 +137,7 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/orders">My Orders</Link>
                   </DropdownMenuItem>
-                  {user?.role === "admin" && (
+                  {userProfile?.role === "admin" && (
                     <DropdownMenuItem asChild>
                       <Link href="/admin">Admin Panel</Link>
                     </DropdownMenuItem>
@@ -154,18 +176,21 @@ export function Navbar() {
               <Link href="/vendors" className="text-foreground/80 hover:text-foreground transition-colors">
                 Vendors
               </Link>
-              <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
-                Orders
-              </Link>
-              <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
-                Dashboard
-              </Link>
-              {user?.role === "admin" && (
-                <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
-                  Admin Panel
-                </Link>
-              )}
-              {!user && (
+              {user ? (
+                <>
+                  <Link href="/orders" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Orders
+                  </Link>
+                  <Link href="/dashboard" className="text-foreground/80 hover:text-foreground transition-colors">
+                    Dashboard
+                  </Link>
+                  {userProfile?.role === "admin" && (
+                    <Link href="/admin" className="text-foreground/80 hover:text-foreground transition-colors">
+                      Admin Panel
+                    </Link>
+                  )}
+                </>
+              ) : (
                 <>
                   <Link href="/auth/signin" className="text-foreground/80 hover:text-foreground transition-colors">
                     Sign In
