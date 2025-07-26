@@ -115,7 +115,7 @@ export default function HomePage() {
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
+                <Card key={i} className="animate-pulse h-[400px]">
                   <div className="h-48 bg-muted rounded-t-lg" />
                   <CardContent className="p-4">
                     <div className="h-4 bg-muted rounded mb-2" />
@@ -128,7 +128,7 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredItems.map((item) => (
-                <Card key={item.id} className="group hover:shadow-lg transition-shadow">
+                <Card key={item.id} className="group hover:shadow-lg transition-shadow h-[400px] flex flex-col">
                   <div className="relative h-48 overflow-hidden rounded-t-lg">
                     <Image
                       src={
@@ -147,24 +147,26 @@ export default function HomePage() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 flex flex-col flex-1">
                     <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
-                    <p className="text-muted-foreground text-sm mb-2 line-clamp-2">{item.description}</p>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-lg text-orange-500">₵{item.price}</span>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{item.prep_time || 30}min</span>
+                    <p className="text-muted-foreground text-sm mb-2 line-clamp-2 flex-1">{item.description}</p>
+                    <div className="mt-auto">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-lg text-orange-500">₵{item.price}</span>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span>{item.prep_time || 30}min</span>
+                        </div>
                       </div>
+                      <p className="text-xs text-muted-foreground mb-3">by {(item as any).vendors?.vendor_name}</p>
+                      <Button
+                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                        size="sm"
+                        onClick={() => handleAddToCart(item)}
+                      >
+                        Add to Cart
+                      </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-3">by {(item as any).vendors?.vendor_name}</p>
-                    <Button
-                      className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
-                      size="sm"
-                      onClick={() => handleAddToCart(item)}
-                    >
-                      Add to Cart
-                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -184,7 +186,7 @@ export default function HomePage() {
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
+                <Card key={i} className="animate-pulse h-[280px]">
                   <div className="h-32 bg-muted rounded-t-lg" />
                   <CardContent className="p-6">
                     <div className="h-6 bg-muted rounded mb-2" />
@@ -197,7 +199,7 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {vendors.map((vendor) => (
-                <Card key={vendor.id} className="group hover:shadow-lg transition-shadow">
+                <Card key={vendor.id} className="group hover:shadow-lg transition-shadow h-[280px] flex flex-col">
                   <div className="relative h-32 overflow-hidden rounded-t-lg bg-gradient-to-r from-orange-400 to-red-400">
                     <Image
                       src={
@@ -209,7 +211,7 @@ export default function HomePage() {
                       className="object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-semibold text-xl">{vendor.vendor_name}</h3>
                       <div className="flex items-center gap-1">
@@ -217,11 +219,11 @@ export default function HomePage() {
                         <span className="text-sm">4.5</span>
                       </div>
                     </div>
-                    <p className="text-muted-foreground mb-4 line-clamp-2">{vendor.description}</p>
-                    <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground mb-4 line-clamp-2 flex-1">{vendor.description}</p>
+                    <div className="flex items-center justify-between mt-auto">
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <MapPin className="h-3 w-3" />
-                        <span>{vendor.address}</span>
+                        <span className="truncate max-w-[120px]">{vendor.address}</span>
                       </div>
                       <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold" size="sm" asChild>
                         <Link href={`/vendor/${vendor.id}`}>
